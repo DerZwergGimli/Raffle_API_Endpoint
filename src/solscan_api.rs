@@ -18,17 +18,13 @@ pub struct SolanaTX {
     status: String,
 }
 
-pub async fn get_solana_tx(tx_signature: String) -> Result<SolanaTX, StatusCode> {
-    let client = reqwest::Client::new();
-    let url = "https://public-api.solscan.io/transaction/".to_owned() + tx_signature.as_str();
-    let mut result = client
-        .get(url.clone())
-        .header("User-Agent", "Mozilla/5.0")
-        .send()
+const BASE_URL: &str = "https://public-api.solscan.io";
+
+pub async fn get_solana_tx(tx_signature: &str) -> Result<SolanaTX, StatusCode> {
+    let mut result = reqwest::get(BASE_URL.to_owned() + "/transaction/" + tx_signature)
         .await
         .unwrap();
 
-    info!("{}", url);
     match result.status() {
         StatusCode::OK => {
             let mut json = json::parse(result.text().await.unwrap().as_str()).unwrap();

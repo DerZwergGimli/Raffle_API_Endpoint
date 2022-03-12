@@ -1,54 +1,59 @@
 use super::model::Raffle;
 use crate::config_loader::ConfigFile;
 use crate::solscan_api::SolanaTX;
-
 use crate::{solscan_api, DatabaseRaffle, Ticket};
 use log::info;
 use mongodb::bson::oid::ObjectId;
 use mongodb::{Client, Collection, Database};
-use reqwest::StatusCode;
 use rust_decimal::prelude::ToPrimitive;
-use snafu::{prelude::*, Whatever};
 use std::env;
+
+enum Error {
+    NotFound,
+}
 
 pub async fn validate_ticket(
     client: &Client,
     db_interface: &DatabaseRaffle,
     ticket: Ticket,
     config: &ConfigFile,
-) -> Result<u16, Whatever> {
-    let tx = solscan_api::get_solana_tx(ticket.spl_tx_signature.clone()).await;
-
-    info!("username={}", ticket.username);
+) -> u16 {
+    let tx = solscan_api::get_solana_tx(ticket.spl_tx_signature.as_str()).await;
 
     match tx {
         Ok(tx) => {
             info!("{:?}", tx);
             // Validate Ticket
             // 1. check if raffle_id is valid
-            if !check_if_raffle_exists(client, db_interface, ticket.raffle_id).await {
-                whatever!("Raffle does not exist")
+            let test = match check_if_raffle_exists(client, db_interface, ticket.raffle_id).await {
+                true => {
+                    info!("raffle_exists [{}]", true);
+                    true
+                }
+                false => {
+                    info!("raffle_exists [{}]", false);
+                    false
+                }
             };
 
             // 2. check if tx_destination is valid
-            if !check_if_tx_destination_valid(&tx, &config.destination_account_address).await {
-                whatever!("Destination invalid")
-            };
-
+            let test2 =
+                check_if_tx_destination_valid(&tx, &config.destination_account_address).await;
             // 3. check if spl_tx_signature is used
-            if check_if_spl_signature_is_used(client, db_interface, &ticket.spl_tx_signature).await
-            {
-                whatever!("SPL Signature already used")
-            };
-
+            let test3 =
+                check_if_spl_signature_is_used(client, db_interface, &ticket.spl_tx_signature)
+                    .await;
             // 4 calculate valid ticket amount
             // 4.1 calculate available ticket amount
             let tickets =
                 calculate_ticket_amount(client, db_interface, ticket.raffle_id, tx.amount).await;
 
-            Ok(tickets)
+            match test && test2 && !test3 {
+                true => tickets,
+                false => 0,
+            }
         }
-        Err(e) => whatever!("API-Error {}", e),
+        Err(e) => 0,
     }
 }
 

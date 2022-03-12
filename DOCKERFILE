@@ -1,37 +1,46 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.56.0 AS chef
-WORKDIR app
+FROM rust:latest AS builder
 
-FROM chef AS planner
+RUN rustup target add x86_64-unknown-linux-musl
+RUN apt update && apt install -y musl-tools musl-dev libssl-dev
+RUN update-ca-certificates
+
+# Create appuser
+ENV USER=myip
+ENV UID=10001
+
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    "${USER}"
+
+
+WORKDIR /app
+
 COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
-# Build dependencies - this is the caching Docker layer!
-RUN cargo chef cook --release --recipe-path recipe.json
-# Build application
-COPY . .
-RUN cargo build --release --bin Raffle_MongoDB_API
 
-# We do not need the Rust toolchain to run the binary!
-FROM debian:buster-slim AS runtime
-RUN apt-get update
-RUN apt-get install openssl -y
-RUN apt-get install libnss3-tools -y
-#RUN apt-get install build-essential procps curl file git -y
-#RUN useradd -ms /bin/bash -g root -G sudo user
-#USER user
-#RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-#$RUN su - user -c 'brew install mkcert'
-WORKDIR app
-COPY conf /app/conf
-RUN mkdir -p /app/cert
-#RUN cd /app/cert && openssl genpkey -out key.pem -algorithm RSA -pkeyopt rsa_keygen_bits:2048
-#RUN cd /app/cert && openssl pkey -in key.pem -pubout -out cert.pem
-RUN cd /app/cert && openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem -subj "/C=GE/ST=London/L=London/O=Global Security/OU=IT Department/CN=example.com"
+RUN cargo build --target x86_64-unknown-linux-musl --release
 
-COPY --from=builder /app/target/release/Raffle_MongoDB_API /app
-RUN ls -la /app
-#EXPOSE 8080
-#CMD ["/app/Raffle_MongoDB_API"]
-ENTRYPOINT ["/app/Raffle_MongoDB_API"]
+####################################################################################################
+## Final image
+####################################################################################################
+FROM scratch
+
+# Import from builder.
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+WORKDIR /app
+
+# Copy our build
+CMD ls /app
+COPY --from=builder /app/target/release/app ./
+
+# Use an unprivileged user.
+USER myip:myip
+
+CMD ["/app/app"]

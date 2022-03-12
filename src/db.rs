@@ -1,24 +1,22 @@
-use crate::config_loader::ConfigFile;
 use crate::{ObjectId, Raffle, Ticket};
 use actix_web::body::None;
-use bson::Bson::Document;
 use futures::future::ok;
-use futures::stream::{StreamExt, TryStreamExt};
-use futures::TryFutureExt;
-use lazy_static::lazy_static;
 use log::*;
-use mongodb::bson::{bson, doc};
 use mongodb::error::Error;
-use mongodb::options::UpdateModifications;
 use mongodb::results::{DeleteResult, InsertOneResult, UpdateResult};
 use mongodb::{Client, Collection, Database};
-use serde::{Deserialize, Serialize};
-use std::{env, result};
+use std::result;
 
-lazy_static! {
-    static ref DB_NAME: String = env::var("DB_NAME").unwrap_or("DB_Raffle".to_string());
-    static ref COLL_RAFFLE: String = env::var("COLL_RAFFLE").unwrap_or("Raffle".to_string());
-    static ref COLL_TICKET: String = env::var("COLL_TICKET").unwrap_or("Ticket".to_string());
+use crate::config_loader::ConfigFile;
+use futures::stream::{StreamExt, TryStreamExt};
+use futures::TryFutureExt;
+use mongodb::bson::{bson, doc};
+use mongodb::options::UpdateModifications;
+
+const COLL_RAFFLE: &str = "raffle";
+
+enum TESTING {
+    UpdateResult,
 }
 
 #[derive(Clone)]
@@ -43,26 +41,21 @@ impl DatabaseRaffle {
         client: &Client,
         raffle: &mut Raffle,
     ) -> Result<InsertOneResult, Error> {
-        raffle.date_created = chrono::Utc::now().timestamp();
-        raffle.date_updated = chrono::Utc::now().timestamp();
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
         raffle.id = ObjectId::new();
-        raffle.status = "created".to_string();
         collection.insert_one(raffle, None).await
     }
 
     pub async fn insert_ticket(
         &self,
         client: &Client,
-        ticket: &mut Ticket,
+        ticket: &Ticket,
     ) -> Result<InsertOneResult, Error> {
-        ticket.date_created = chrono::Utc::now().timestamp();
-        ticket.date_updated = chrono::Utc::now().timestamp();
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_ticket.as_str());
         collection.insert_one(ticket, None).await
     }
     //endregion
@@ -74,8 +67,8 @@ impl DatabaseRaffle {
         raffle_id: ObjectId,
     ) -> Result<DeleteResult, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
         collection.delete_one(doc! {"_id": raffle_id}, None).await
     }
 
@@ -85,8 +78,8 @@ impl DatabaseRaffle {
         ticket_id: ObjectId,
     ) -> Result<DeleteResult, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_ticket.as_str());
         collection.delete_one(doc! {"_id": ticket_id}, None).await
     }
     //endregion
@@ -94,15 +87,15 @@ impl DatabaseRaffle {
     //region === FIND ALL ===
     pub async fn get_all_raffles(&self, client: &Client) -> Result<Vec<Raffle>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
         collection.find(None, None).await?.try_collect().await
     }
 
     pub async fn get_all_tickets(&self, client: &Client) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_ticket.as_str());
 
         collection.find(None, None).await?.try_collect().await
     }
@@ -115,8 +108,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Raffle>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
         collection
             .find(doc! {"_id": id.clone()}, None)
             .await?
@@ -130,8 +123,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_raffle.as_str());
         collection
             .find(doc! {"_id": id}, None)
             .await?
@@ -147,8 +140,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_raffle.as_str());
         collection
             .find(doc! {"raffle_id": id}, None)
             .await?
@@ -162,8 +155,8 @@ impl DatabaseRaffle {
         spl_tx_signature: &String,
     ) -> Result<Option<Ticket>, Error> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Ticket>(self.collection_ticket.as_str());
 
         collection
             .find_one(doc! {"spl_tx_signature": spl_tx_signature}, None)
@@ -175,27 +168,23 @@ impl DatabaseRaffle {
     pub async fn update_raffle(
         &self,
         client: &Client,
-        raffle: &mut Raffle,
+        raffle: &Raffle,
     ) -> mongodb::error::Result<UpdateResult> {
-        raffle.date_updated = chrono::Utc::now().timestamp();
-
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
 
         let mut r = raffle.clone();
-        let doc = doc! {
-                "$set":{
-                "title": r.title,
-                "description": r.description,
-                "status": r.status,
-                "ticket_amount": r.ticket_amount as i32,
-                "ticket_price": r.ticket_price as f32,
-                "ticket_token_name": r.ticket_token_name,
-                "rule": r.rule,
-                "date_updated": chrono::Utc::now().timestamp()
-        }};
-        collection.update_one(doc! {"_id": r.id}, doc, None).await
+
+        collection
+            .update_one(
+                doc! {"_id": r.id},
+                doc! {"$set":{
+                    "description":r.description,
+                }},
+                None,
+            )
+            .await
     }
     pub async fn update_ticket(
         &self,
@@ -203,16 +192,20 @@ impl DatabaseRaffle {
         ticket: &Ticket,
     ) -> mongodb::error::Result<UpdateResult> {
         let collection = client
-            .database(DB_NAME.as_ref())
-            .collection::<Ticket>(COLL_TICKET.as_ref());
+            .database(self.database_name.as_str())
+            .collection::<Raffle>(self.collection_raffle.as_str());
 
         let mut t = ticket.clone();
 
-        let doc = doc! {
-                "$set":{
-                "username": t.username
-        }};
-        collection.update_one(doc! {"_id": t.id}, doc, None).await
+        collection
+            .update_one(
+                doc! {"_id": t.id},
+                doc! {"$set":{
+                    "description": t.amount.to_string(),
+                }},
+                None,
+            )
+            .await
     }
     //endregion
 }

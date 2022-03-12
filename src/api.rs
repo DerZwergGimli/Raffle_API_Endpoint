@@ -1,12 +1,13 @@
 use crate::config_loader::ConfigFile;
-
-use crate::{validator, DatabaseRaffle, ObjectId};
-
+use crate::solscan_api::get_solana_tx;
+use crate::{solscan_api, validator, DatabaseRaffle, ObjectId};
 use actix_web::{delete, get, patch, post, web, App, HttpResponse, HttpServer};
 use log::{error, info};
-
+use mongodb::error::Error;
 use mongodb::{bson::doc, options::IndexOptions, Client, Collection, IndexModel};
+use std::str::FromStr;
 
+use super::db;
 use super::model::*;
 
 //region === POST ===
@@ -20,12 +21,13 @@ pub async fn add_raffle(
     let result = db_interface.insert_raffle(&client, &mut data).await;
     match result {
         Ok(_) => {
-            info!("{:?}", data);
-            HttpResponse::Ok().body("ok")
+            info!("Added to DB: {:?}", data);
+            HttpResponse::Ok().body("raffle added")
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", data);
-            HttpResponse::InternalServerError().body(format!("{:?}", err))
+            error!("Unable to add to DB: {:?}", data);
+            HttpResponse::InternalServerError().body(format!("Unable to add raffle"))
         }
     }
 }
@@ -38,45 +40,26 @@ pub async fn add_ticket(
     form: web::Json<Ticket>,
 ) -> HttpResponse {
     let mut ticket = form.into_inner();
-    let tickets = 0;
+    let tickets = validator::validate_ticket(&client, &db_interface, ticket.clone(), &conf).await;
 
-    match validator::validate_ticket(&client, &db_interface, ticket.clone(), &conf).await {
-        Ok(tickets) => {
-            ticket.amount = tickets;
-            let result = db_interface.insert_ticket(&client, &mut ticket).await;
-
-            match result {
-                Ok(_) => {
-                    info!("{:?}", ticket);
-                    HttpResponse::Ok().body("ok")
-                }
-                Err(err) => {
-                    error!("{:?}", err);
-                    HttpResponse::InternalServerError().body(err.to_string())
-                }
-            }
-        }
-
-        Err(err) => HttpResponse::InternalServerError().body(format!("{}", err.to_string())),
-    }
-    //info!("Tickets_out={:?}", tickets);
-    /*if tickets != 0 {
+    if tickets != 0 {
         ticket.amount = tickets;
-        let result = db_interface.insert_ticket(&client, &mut ticket).await;
+        let result = db_interface.insert_ticket(&client, &ticket).await;
 
         match result {
             Ok(_) => {
-                info!("{:?}", ticket);
-                HttpResponse::Ok().body("ok")
+                info!("Added to DB: {:?}", ticket);
+                HttpResponse::Ok().body(format!("{:?} tickets added", tickets))
             }
+            //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
             Err(err) => {
-                error!("{:?}", err);
-                HttpResponse::InternalServerError().body(err.to_string())
+                error!("Unable to add to DB: {:?}", ticket);
+                HttpResponse::InternalServerError().body(format!("Unable to add ticket"))
             }
         }
     } else {
         HttpResponse::Ok().body(format!("Invalid input: {:?} Tickets were added!", tickets))
-    }*/
+    }
 }
 //endregion
 
@@ -87,21 +70,23 @@ pub async fn get_raffle(
     db_interface: web::Data<DatabaseRaffle>,
     id: web::Path<String>,
 ) -> HttpResponse {
-    let oid = id.into_inner();
-    let result = match oid.as_str() {
+    let mut oid = id.into_inner();
+    let mut result = match oid.as_str() {
         "0" => db_interface.get_all_raffles(&client).await,
         _ => {
-            let data = ObjectId::parse_str(oid.as_str()).unwrap();
+            let mut data = ObjectId::parse_str(oid.as_str()).unwrap();
             db_interface.get_raffle_by_id(&client, data).await
         }
     };
+
     match result {
         Ok(_) => {
-            info!("{:?}", result);
+            info!("Found in DB: {:?}", result);
             HttpResponse::Ok().json(result.unwrap())
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
+            error!("Unable to find id {:?}", oid);
             HttpResponse::InternalServerError().body(err.to_string())
         }
     }
@@ -113,21 +98,23 @@ pub async fn get_ticket(
     db_interface: web::Data<DatabaseRaffle>,
     id: web::Path<String>,
 ) -> HttpResponse {
-    let oid = id.into_inner();
-    let result = match oid.as_str() {
+    let mut oid = id.into_inner();
+    let mut result = match oid.as_str() {
         "0" => db_interface.get_all_tickets(&client).await,
         _ => {
-            let data = ObjectId::parse_str(oid.as_str()).unwrap();
+            let mut data = ObjectId::parse_str(oid.as_str()).unwrap();
             db_interface.get_ticket_by_id(&client, data).await
         }
     };
+
     match result {
         Ok(_) => {
-            info!("{:?}", result);
+            info!("Found in DB: {:?}", result);
             HttpResponse::Ok().json(result.unwrap())
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
+            error!("Unable to find id {:?}", oid);
             HttpResponse::InternalServerError().body(err.to_string())
         }
     }
@@ -146,13 +133,14 @@ pub async fn update_raffle(
     data.id = ObjectId::parse_str(id.into_inner().to_string()).unwrap();
     let result = db_interface.update_raffle(&client, &mut data).await;
     match result {
-        Ok(result) => {
-            info!("Updated {:?}", data);
-            HttpResponse::Ok().body(format!("{:?}", result.matched_count))
+        Ok(_) => {
+            info!("Updated to DB: {:?}", data);
+            HttpResponse::Ok().body("raffle updated")
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            error!("Unable to update to DB: {:?}", data);
+            HttpResponse::InternalServerError().body(format!("Unable to update raffle"))
         }
     }
 }
@@ -168,13 +156,14 @@ pub async fn update_ticket(
     data.id = ObjectId::parse_str(id.into_inner().to_string()).unwrap();
     let result = db_interface.update_ticket(&client, &mut data).await;
     match result {
-        Ok(result) => {
-            info!("{:?}", data);
-            HttpResponse::Ok().body(format!("{:?}", result.matched_count))
+        Ok(_) => {
+            info!("Updated to DB: {:?}", data);
+            HttpResponse::Ok().body("ticket updated")
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            error!("Unable to update to DB: {:?}", data);
+            HttpResponse::InternalServerError().body(format!("Unable to update ticket"))
         }
     }
 }
@@ -187,16 +176,17 @@ pub async fn remove_raffle(
     db_interface: web::Data<DatabaseRaffle>,
     id: web::Path<String>,
 ) -> HttpResponse {
-    let data = ObjectId::parse_str(id.into_inner()).unwrap();
+    let mut data = ObjectId::parse_str(id.into_inner()).unwrap();
     let result = db_interface.remove_raffle(&client, data).await;
     match result {
         Ok(_) => {
-            info!("{:?}", data);
-            HttpResponse::Ok().body("ok")
+            info!("Removed from DB: {:?}", data);
+            HttpResponse::Ok().body("raffle removed")
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            error!("Unable to remove from DB: {:?}", data);
+            HttpResponse::InternalServerError().body(format!("Unable to remove raffle"))
         }
     }
 }
@@ -207,16 +197,17 @@ pub async fn remove_ticket(
     db_interface: web::Data<DatabaseRaffle>,
     id: web::Path<String>,
 ) -> HttpResponse {
-    let data = ObjectId::parse_str(id.into_inner()).unwrap();
+    let mut data = ObjectId::parse_str(id.into_inner()).unwrap();
     let result = db_interface.remove_ticket(&client, data).await;
     match result {
         Ok(_) => {
-            info!("{:?}", data);
-            HttpResponse::Ok().body("ok")
+            info!("Removed from DB: {:?}", data);
+            HttpResponse::Ok().body("ticket removed")
         }
+        //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
-            error!("{:?}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            error!("Unable to remove from DB: {:?}", data);
+            HttpResponse::InternalServerError().body(format!("Unable to remove ticket"))
         }
     }
 }
