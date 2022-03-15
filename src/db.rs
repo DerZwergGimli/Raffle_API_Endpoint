@@ -1,22 +1,23 @@
+use crate::config_loader::ConfigFile;
 use crate::{ObjectId, Raffle, Ticket};
 use actix_web::body::None;
 use futures::future::ok;
-use log::*;
-use mongodb::error::Error;
-use mongodb::results::{DeleteResult, InsertOneResult, UpdateResult};
-use mongodb::{Client, Collection, Database};
-use std::result;
-
-use crate::config_loader::ConfigFile;
 use futures::stream::{StreamExt, TryStreamExt};
 use futures::TryFutureExt;
+use log::*;
 use mongodb::bson::{bson, doc};
+use mongodb::error::Error;
 use mongodb::options::UpdateModifications;
+use mongodb::results::{DeleteResult, InsertOneResult, UpdateResult};
+use mongodb::{Client, Collection, Database};
 
-const COLL_RAFFLE: &str = "raffle";
+use lazy_static::lazy_static;
+use std::{env, result};
 
-enum TESTING {
-    UpdateResult,
+lazy_static! {
+    static ref DB_NAME: String = env::var("DB_NAME").unwrap_or("DB_Raffle".to_string());
+    static ref COLL_RAFFLE: String = env::var("COLL_RAFFLE").unwrap_or("Raffle".to_string());
+    static ref COLL_TICKET: String = env::var("COLL_TICKET").unwrap_or("Ticket".to_string());
 }
 
 #[derive(Clone)]
@@ -42,8 +43,8 @@ impl DatabaseRaffle {
         raffle: &mut Raffle,
     ) -> Result<InsertOneResult, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
         raffle.id = ObjectId::new();
         collection.insert_one(raffle, None).await
     }
@@ -54,8 +55,8 @@ impl DatabaseRaffle {
         ticket: &Ticket,
     ) -> Result<InsertOneResult, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_ticket.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
         collection.insert_one(ticket, None).await
     }
     //endregion
@@ -67,8 +68,8 @@ impl DatabaseRaffle {
         raffle_id: ObjectId,
     ) -> Result<DeleteResult, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
         collection.delete_one(doc! {"_id": raffle_id}, None).await
     }
 
@@ -78,8 +79,8 @@ impl DatabaseRaffle {
         ticket_id: ObjectId,
     ) -> Result<DeleteResult, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_ticket.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
         collection.delete_one(doc! {"_id": ticket_id}, None).await
     }
     //endregion
@@ -87,15 +88,15 @@ impl DatabaseRaffle {
     //region === FIND ALL ===
     pub async fn get_all_raffles(&self, client: &Client) -> Result<Vec<Raffle>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
         collection.find(None, None).await?.try_collect().await
     }
 
     pub async fn get_all_tickets(&self, client: &Client) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_ticket.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
 
         collection.find(None, None).await?.try_collect().await
     }
@@ -108,8 +109,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Raffle>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
         collection
             .find(doc! {"_id": id.clone()}, None)
             .await?
@@ -123,8 +124,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
         collection
             .find(doc! {"_id": id}, None)
             .await?
@@ -140,8 +141,8 @@ impl DatabaseRaffle {
         id: ObjectId,
     ) -> Result<Vec<Ticket>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
         collection
             .find(doc! {"raffle_id": id}, None)
             .await?
@@ -155,8 +156,8 @@ impl DatabaseRaffle {
         spl_tx_signature: &String,
     ) -> Result<Option<Ticket>, Error> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Ticket>(self.collection_ticket.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Ticket>(COLL_TICKET.as_ref());
 
         collection
             .find_one(doc! {"spl_tx_signature": spl_tx_signature}, None)
@@ -171,8 +172,8 @@ impl DatabaseRaffle {
         raffle: &Raffle,
     ) -> mongodb::error::Result<UpdateResult> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
 
         let mut r = raffle.clone();
 
@@ -192,8 +193,8 @@ impl DatabaseRaffle {
         ticket: &Ticket,
     ) -> mongodb::error::Result<UpdateResult> {
         let collection = client
-            .database(self.database_name.as_str())
-            .collection::<Raffle>(self.collection_raffle.as_str());
+            .database(DB_NAME.as_ref())
+            .collection::<Raffle>(COLL_RAFFLE.as_ref());
 
         let mut t = ticket.clone();
 
