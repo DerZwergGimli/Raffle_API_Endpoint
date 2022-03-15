@@ -27,6 +27,7 @@ pub async fn add_raffle(
         //Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
         Err(err) => {
             error!("Unable to add to DB: {:?}", data);
+            error!("Error: {:?}", err);
             HttpResponse::InternalServerError().body(format!("Unable to add raffle"))
         }
     }

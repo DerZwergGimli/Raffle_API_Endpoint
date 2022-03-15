@@ -9,6 +9,10 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - db-storage:/data/db
+
 
   api:
     build:
@@ -16,7 +20,17 @@ services:
       dockerfile: DOCKERFILE
     image: api
     restart: unless-stopped
+    links:
+      - mongo
+    depends_on:
+      - mongo
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "8080:8080"
 
+volumes:
+  db-storage: { }
 #  mongo-express:
 #    image: mongo-express
 #    restart: always
