@@ -5,10 +5,11 @@ use crate::{solscan_api, DatabaseRaffle, Ticket};
 use log::info;
 use mongodb::bson::oid::ObjectId;
 use mongodb::{Client, Collection, Database};
+use reqwest::StatusCode;
 use rust_decimal::prelude::ToPrimitive;
 use std::env;
 
-enum Error {
+pub enum Error {
     NotFound,
 }
 
@@ -17,24 +18,17 @@ pub async fn validate_ticket(
     db_interface: &DatabaseRaffle,
     ticket: Ticket,
     config: &ConfigFile,
-) -> u16 {
-    let tx = solscan_api::get_solana_tx(ticket.spl_tx_signature.as_str()).await;
+) -> Result<u16, StatusCode> {
+    let tx = solscan_api::get_solana_tx(ticket.spl_tx_signature.clone()).await;
+
+    info!("username={}", ticket.username);
 
     match tx {
         Ok(tx) => {
             info!("{:?}", tx);
             // Validate Ticket
             // 1. check if raffle_id is valid
-            let test = match check_if_raffle_exists(client, db_interface, ticket.raffle_id).await {
-                true => {
-                    info!("raffle_exists [{}]", true);
-                    true
-                }
-                false => {
-                    info!("raffle_exists [{}]", false);
-                    false
-                }
-            };
+            let test1 = check_if_raffle_exists(client, db_interface, ticket.raffle_id).await;
 
             // 2. check if tx_destination is valid
             let test2 =
@@ -48,12 +42,16 @@ pub async fn validate_ticket(
             let tickets =
                 calculate_ticket_amount(client, db_interface, ticket.raffle_id, tx.amount).await;
 
-            match test && test2 && !test3 {
-                true => tickets,
-                false => 0,
+            info!("check_if_raffle_exists={}", test1);
+            info!("check_if_tx_destination_valid={}", test2);
+            info!("check_if_spl_signature_is_used={}", test3);
+
+            match test1 && test2 && !test3 {
+                true => Ok(tickets),
+                false => Ok(0),
             }
         }
-        Err(e) => 0,
+        Err(e) => Err(e),
     }
 }
 

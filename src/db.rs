@@ -1,17 +1,18 @@
 use crate::config_loader::ConfigFile;
 use crate::{ObjectId, Raffle, Ticket};
 use actix_web::body::None;
+use bson::Bson::Document;
 use futures::future::ok;
 use futures::stream::{StreamExt, TryStreamExt};
 use futures::TryFutureExt;
+use lazy_static::lazy_static;
 use log::*;
 use mongodb::bson::{bson, doc};
 use mongodb::error::Error;
 use mongodb::options::UpdateModifications;
 use mongodb::results::{DeleteResult, InsertOneResult, UpdateResult};
 use mongodb::{Client, Collection, Database};
-
-use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::{env, result};
 
 lazy_static! {
@@ -42,18 +43,23 @@ impl DatabaseRaffle {
         client: &Client,
         raffle: &mut Raffle,
     ) -> Result<InsertOneResult, Error> {
+        raffle.date_created = chrono::Utc::now().timestamp();
+        raffle.date_updated = chrono::Utc::now().timestamp();
         let collection = client
             .database(DB_NAME.as_ref())
             .collection::<Raffle>(COLL_RAFFLE.as_ref());
         raffle.id = ObjectId::new();
+        raffle.status = "created".to_string();
         collection.insert_one(raffle, None).await
     }
 
     pub async fn insert_ticket(
         &self,
         client: &Client,
-        ticket: &Ticket,
+        ticket: &mut Ticket,
     ) -> Result<InsertOneResult, Error> {
+        ticket.date_created = chrono::Utc::now().timestamp();
+        ticket.date_updated = chrono::Utc::now().timestamp();
         let collection = client
             .database(DB_NAME.as_ref())
             .collection::<Ticket>(COLL_TICKET.as_ref());
@@ -169,23 +175,27 @@ impl DatabaseRaffle {
     pub async fn update_raffle(
         &self,
         client: &Client,
-        raffle: &Raffle,
+        raffle: &mut Raffle,
     ) -> mongodb::error::Result<UpdateResult> {
+        raffle.date_updated = chrono::Utc::now().timestamp();
+
         let collection = client
             .database(DB_NAME.as_ref())
             .collection::<Raffle>(COLL_RAFFLE.as_ref());
 
         let mut r = raffle.clone();
-
-        collection
-            .update_one(
-                doc! {"_id": r.id},
-                doc! {"$set":{
-                    "description":r.description,
-                }},
-                None,
-            )
-            .await
+        let doc = doc! {
+                "$set":{
+                "title": r.title,
+                "description": r.description,
+                "status": r.status,
+                "ticket_amount": r.ticket_amount as i32,
+                "ticket_price": r.ticket_price as f32,
+                "ticket_token_name": r.ticket_token_name,
+                "rule": r.rule,
+                "date_updated": chrono::Utc::now().timestamp()
+        }};
+        collection.update_one(doc! {"_id": r.id}, doc, None).await
     }
     pub async fn update_ticket(
         &self,
@@ -194,19 +204,15 @@ impl DatabaseRaffle {
     ) -> mongodb::error::Result<UpdateResult> {
         let collection = client
             .database(DB_NAME.as_ref())
-            .collection::<Raffle>(COLL_RAFFLE.as_ref());
+            .collection::<Ticket>(COLL_TICKET.as_ref());
 
         let mut t = ticket.clone();
 
-        collection
-            .update_one(
-                doc! {"_id": t.id},
-                doc! {"$set":{
-                    "description": t.amount.to_string(),
-                }},
-                None,
-            )
-            .await
+        let doc = doc! {
+                "$set":{
+                "username": t.username
+        }};
+        collection.update_one(doc! {"_id": t.id}, doc, None).await
     }
     //endregion
 }
