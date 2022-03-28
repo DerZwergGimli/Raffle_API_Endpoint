@@ -1,6 +1,7 @@
 use crate::config_loader::ConfigFile;
 
 use crate::{validator, DatabaseRaffle, ObjectId};
+
 use actix_web::{delete, get, patch, post, web, App, HttpResponse, HttpServer};
 use log::{error, info};
 
@@ -23,8 +24,8 @@ pub async fn add_raffle(
             HttpResponse::Ok().body("ok")
         }
         Err(err) => {
-            error!("{:?}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            error!("{:?}", data);
+            HttpResponse::InternalServerError().body(format!("{:?}", err))
         }
     }
 }
@@ -37,16 +38,29 @@ pub async fn add_ticket(
     form: web::Json<Ticket>,
 ) -> HttpResponse {
     let mut ticket = form.into_inner();
-    let tickets =
-        match validator::validate_ticket(&client, &db_interface, ticket.clone(), &conf).await {
-            Ok(tickets) => tickets,
-            Err(e) => {
-                error!("Returned {}", e);
-                0
+    let tickets = 0;
+
+    match validator::validate_ticket(&client, &db_interface, ticket.clone(), &conf).await {
+        Ok(tickets) => {
+            ticket.amount = tickets;
+            let result = db_interface.insert_ticket(&client, &mut ticket).await;
+
+            match result {
+                Ok(_) => {
+                    info!("{:?}", ticket);
+                    HttpResponse::Ok().body("ok")
+                }
+                Err(err) => {
+                    error!("{:?}", err);
+                    HttpResponse::InternalServerError().body(err.to_string())
+                }
             }
-        };
-    info!("Tickets_out={:?}", tickets);
-    if tickets != 0 {
+        }
+
+        Err(err) => HttpResponse::InternalServerError().body(format!("{}", err.to_string())),
+    }
+    //info!("Tickets_out={:?}", tickets);
+    /*if tickets != 0 {
         ticket.amount = tickets;
         let result = db_interface.insert_ticket(&client, &mut ticket).await;
 
@@ -62,7 +76,7 @@ pub async fn add_ticket(
         }
     } else {
         HttpResponse::Ok().body(format!("Invalid input: {:?} Tickets were added!", tickets))
-    }
+    }*/
 }
 //endregion
 

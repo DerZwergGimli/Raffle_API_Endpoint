@@ -31,6 +31,8 @@ pub struct Ticket {
     pub username: String,
     pub spl_tx_signature: String,
     #[serde(default)]
+    pub amount_send: f32,
+    #[serde(default)]
     pub amount: u16,
     #[serde(default)]
     pub date_created: i64,
