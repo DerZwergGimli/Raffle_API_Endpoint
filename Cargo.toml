@@ -1,0 +1,31 @@
+[package]
+name = "Raffle_MongoDB_API"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+env_logger = "0.9"
+log = "0.4.1"
+actix-web = { version = "4.0", features = ["rustls"] }
+actix-files = "0.6"
+mongodb = "2.1.0"
+serde = { version = "1.0", features = ["derive"] }
+futures = "0.3.2"
+reqwest = "0.11.9"
+json = "0.12.4"
+bson = "2.1"
+rust_decimal = "1.22.0"
+confy = "0.4.0"
+actix-web-httpauth = "0.6"
+config = "0.12"
+glob = "0.3"
+rustls = "0.20.2"
+rustls-pemfile = "0.2.1"
+openssl = { version = "0.10", features = ["vendored"] }
+lazy_static = "1.4.0"
+chrono = { version = "0.4.19", features = ["serde"] }
+solana-client = "1.10.0"
+solana-sdk = "1.10.0"
+snafu = "0.7"
