@@ -23,9 +23,6 @@ use mongodb::bson::oid::ObjectId;
 use mongodb::{bson::doc, options::IndexOptions, Client, Collection, IndexModel};
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::*;
-use solana_sdk::signature::Signature;
 use std::fs::File;
 use std::io::BufReader;
 use std::str::FromStr;
@@ -40,7 +37,6 @@ async fn main() -> std::io::Result<()> {
     info!("Starting...");
 
     let url = "http://localhost:8899".to_string();
-    let client = RpcClient::new(url);
 
     //let sig_s = String::from(
     //    "3xrq4cysrDDZTNwXhVG3Cz4rQGxaRwuy5sa5yFEHzhWzTBdUYGZ1fQusv9nd2Qxez1Rr2jEQUTiT8zhoXsDHLbht",
