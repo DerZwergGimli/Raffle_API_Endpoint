@@ -43,7 +43,7 @@ pub async fn add_ticket(
             match result {
                 Ok(_) => {
                     info!("{:?}", ticket);
-                    HttpResponse::Ok().body("ok")
+                    HttpResponse::Ok().body(format!("You got {} Tickets", ticket.amount))
                 }
                 Err(err) => {
                     error!("{:?}", err);

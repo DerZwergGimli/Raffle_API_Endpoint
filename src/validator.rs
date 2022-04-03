@@ -129,7 +129,7 @@ async fn calculate_ticket_amount(
     raffle_id: ObjectId,
     usdc_amount: f32,
 ) -> u16 {
-    let raffle = db_interface
+    let mut raffle = db_interface
         .get_raffle_by_id(client, raffle_id)
         .await
         .unwrap();
@@ -157,9 +157,11 @@ async fn calculate_ticket_amount(
 
     if tickets_left > 0 {
         if input_value_ticket <= tickets_left.to_f32().unwrap() {
+            raffle[0].status = "closed".to_string();
+            db_interface.update_raffle(client, &mut raffle[0]);
             input_value_ticket as u16
         } else {
-            0.0 as u16
+            tickets_left as u16
         }
     } else {
         0.0 as u16
