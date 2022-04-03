@@ -1,39 +1,27 @@
-use crate::config_loader::ConfigFile;
 use crate::{ObjectId, Raffle, Ticket};
-use actix_web::body::None;
-use bson::Bson::Document;
-use futures::future::ok;
-use futures::stream::{StreamExt, TryStreamExt};
-use futures::TryFutureExt;
+use futures::stream::{ TryStreamExt};
 use lazy_static::lazy_static;
-use log::*;
-use mongodb::bson::{bson, doc};
+use mongodb::bson::{doc};
 use mongodb::error::Error;
-use mongodb::options::UpdateModifications;
 use mongodb::results::{DeleteResult, InsertOneResult, UpdateResult};
-use mongodb::{Client, Collection, Database};
-use serde::{Deserialize, Serialize};
-use std::{env, result};
+use mongodb::{Client};
+use std::{env};
 
 lazy_static! {
-    static ref DB_NAME: String = env::var("DB_NAME").unwrap_or("DB_Raffle".to_string());
-    static ref COLL_RAFFLE: String = env::var("COLL_RAFFLE").unwrap_or("Raffle".to_string());
-    static ref COLL_TICKET: String = env::var("COLL_TICKET").unwrap_or("Ticket".to_string());
+    static ref DB_NAME: String = env::var("DB_NAME").unwrap_or_else(|_| "DB_Raffle".to_string());
+    static ref COLL_RAFFLE: String = env::var("COLL_RAFFLE").unwrap_or_else(|_| "Raffle".to_string());
+    static ref COLL_TICKET: String = env::var("COLL_TICKET").unwrap_or_else(|_| "Ticket".to_string());
 }
 
 #[derive(Clone)]
 pub struct DatabaseRaffle {
-    pub(crate) database_name: String,
-    pub(crate) collection_raffle: String,
-    pub(crate) collection_ticket: String,
+
 }
 
 impl DatabaseRaffle {
-    pub fn new(conf: ConfigFile) -> Self {
+    pub fn new() -> Self {
         Self {
-            database_name: conf.database_name,
-            collection_raffle: conf.collection_raffle,
-            collection_ticket: conf.collection_ticket,
+
         }
     }
 
@@ -183,7 +171,7 @@ impl DatabaseRaffle {
             .database(DB_NAME.as_ref())
             .collection::<Raffle>(COLL_RAFFLE.as_ref());
 
-        let mut r = raffle.clone();
+        let r = raffle.clone();
         let doc = doc! {
                 "$set":{
                 "title": r.title,
@@ -206,7 +194,7 @@ impl DatabaseRaffle {
             .database(DB_NAME.as_ref())
             .collection::<Ticket>(COLL_TICKET.as_ref());
 
-        let mut t = ticket.clone();
+        let t = ticket.clone();
 
         let doc = doc! {
                 "$set":{

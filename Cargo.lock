@@ -3,33 +3,6 @@
 version = 3
 
 [[package]]
-name = "Raffle_MongoDB_API"
-version = "0.1.0"
-dependencies = [
- "actix-files",
- "actix-web",
- "actix-web-httpauth",
- "bson",
- "chrono",
- "config",
- "confy",
- "env_logger",
- "futures",
- "glob",
- "json",
- "lazy_static",
- "log",
- "mongodb",
- "openssl",
- "reqwest",
- "rust_decimal",
- "rustls 0.20.4",
- "rustls-pemfile",
- "serde",
- "snafu",
-]
-
-[[package]]
 name = "actix-codec"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1755,6 +1728,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "864d3e96a899863136fc6e99f3d7cae289dafe43bf2c5ac19b70df7210c0a145"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "raffle_mongo_api"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "actix-web-httpauth",
+ "bson",
+ "chrono",
+ "config",
+ "confy",
+ "env_logger",
+ "futures",
+ "glob",
+ "json",
+ "lazy_static",
+ "log",
+ "mongodb",
+ "openssl",
+ "reqwest",
+ "rust_decimal",
+ "rustls 0.20.4",
+ "rustls-pemfile",
+ "serde",
+ "snafu",
 ]
 
 [[package]]

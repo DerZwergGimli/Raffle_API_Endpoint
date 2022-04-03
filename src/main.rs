@@ -1,3 +1,22 @@
+use std::env;
+use std::fs::File;
+use std::io::BufReader;
+use actix_web::{App, Error, HttpServer, web};
+use actix_web::dev::ServiceRequest;
+use actix_web_httpauth::extractors::AuthenticationError;
+use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
+use actix_web_httpauth::middleware::HttpAuthentication;
+use log::*;
+use mongodb::{Client};
+use mongodb::bson::oid::ObjectId;
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
+use api::*;
+use db::DatabaseRaffle;
+use model::*;
+
+
+
 mod api;
 mod config_loader;
 mod db;
@@ -5,28 +24,6 @@ mod model;
 mod mongo_index;
 mod solscan_api;
 mod validator;
-
-use actix_files::Files;
-use actix_web::dev::ServiceRequest;
-use actix_web::{get, post, web, App, Error, HttpResponse, HttpServer};
-use actix_web_httpauth::extractors::basic::BasicAuth;
-use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
-use actix_web_httpauth::extractors::AuthenticationError;
-use actix_web_httpauth::middleware::HttpAuthentication;
-use api::*;
-use db::DatabaseRaffle;
-use log::*;
-use log::{error, log};
-use model::*;
-use mongo_index::*;
-use mongodb::bson::oid::ObjectId;
-use mongodb::{bson::doc, options::IndexOptions, Client, Collection, IndexModel};
-use rustls::{Certificate, PrivateKey, ServerConfig};
-use rustls_pemfile::{certs, pkcs8_private_keys};
-use std::fs::File;
-use std::io::BufReader;
-use std::str::FromStr;
-use validator::*;
 
 //use solana_sdk::*;
 
@@ -36,26 +33,15 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     info!("Starting...");
 
-    let url = "http://localhost:8899".to_string();
-
-    //let sig_s = String::from(
-    //    "3xrq4cysrDDZTNwXhVG3Cz4rQGxaRwuy5sa5yFEHzhWzTBdUYGZ1fQusv9nd2Qxez1Rr2jEQUTiT8zhoXsDHLbht",
-    //);
-    //let sig = Signature::from_str(&*sig_s).unwrap();
-    //let stat = solana_client.get_signature_status(&sig).await.unwrap();
-    //println!("{:?}", stat);
-    //TODO
-    // https://stackoverflow.com/questions/71107464/get-solana-transaction-status-using-rust
+    let server_address = format!("{}:{}", env::var("SERVER_IP").unwrap(), env::var("SERVER_PORT").unwrap());
 
     //Server Setup
-    let uri = config_loader::load_config_file().mongodb_uri;
-    let client = Client::with_uri_str(uri).await.expect("failed to connect");
-    let db_interface = DatabaseRaffle::new(config_loader::load_config_file().clone());
+    let m_uri = env::var("MONGODB_URI").unwrap();
+    let client = Client::with_uri_str(m_uri).await.expect("failed to connect");
+    let db_interface = DatabaseRaffle::new();
     let config = load_certificate();
     info!(
-        "Server available at: https://{:?}:{:?} ",
-        config_loader::load_config_file().server_ip,
-        config_loader::load_config_file().server_port,
+        "Server available at: https:://{} ", server_address
     );
 
     HttpServer::new(move || {
@@ -81,16 +67,13 @@ async fn main() -> std::io::Result<()> {
                     .service(update_ticket),
             )
     })
-    /*.bind("localhost:8080")?*/
-    .bind_rustls(
-        (
-            config_loader::load_config_file().server_ip,
-            config_loader::load_config_file().server_port,
-        ),
-        config,
-    )?
-    .run()
-    .await
+        /*.bind("localhost:8080")?*/
+        .bind_rustls(
+            server_address,
+            config,
+        )?
+        .run()
+        .await
 }
 
 async fn token_validator(

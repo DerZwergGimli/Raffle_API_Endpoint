@@ -1,12 +1,7 @@
-use crate::config_loader::ConfigFile;
-
 use crate::{validator, DatabaseRaffle, ObjectId};
-
-use actix_web::{delete, get, patch, post, web, App, HttpResponse, HttpServer};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use log::{error, info};
-
-use mongodb::{bson::doc, options::IndexOptions, Client, Collection, IndexModel};
-
+use mongodb::{Client};
 use super::model::*;
 
 //region === POST ===
@@ -34,13 +29,13 @@ pub async fn add_raffle(
 pub async fn add_ticket(
     client: web::Data<Client>,
     db_interface: web::Data<DatabaseRaffle>,
-    conf: web::Data<ConfigFile>,
     form: web::Json<Ticket>,
 ) -> HttpResponse {
     let mut ticket = form.into_inner();
-    let tickets = 0;
+    HttpResponse::Ok().body("hello there");
+    info!("{:?}", ticket);
 
-    match validator::validate_ticket(&client, &db_interface, ticket.clone(), &conf).await {
+    match validator::validate_ticket(&client, &db_interface, ticket.clone()).await {
         Ok(tickets) => {
             ticket.amount = tickets;
             let result = db_interface.insert_ticket(&client, &mut ticket).await;
@@ -52,31 +47,12 @@ pub async fn add_ticket(
                 }
                 Err(err) => {
                     error!("{:?}", err);
-                    HttpResponse::InternalServerError().body(err.to_string())
+                    HttpResponse::Ok().body(err.to_string())
                 }
             }
         }
-
-        Err(err) => HttpResponse::InternalServerError().body(format!("{}", err.to_string())),
+        Err(err) => HttpResponse::Ok().body(err.to_string()),
     }
-    //info!("Tickets_out={:?}", tickets);
-    /*if tickets != 0 {
-        ticket.amount = tickets;
-        let result = db_interface.insert_ticket(&client, &mut ticket).await;
-
-        match result {
-            Ok(_) => {
-                info!("{:?}", ticket);
-                HttpResponse::Ok().body("ok")
-            }
-            Err(err) => {
-                error!("{:?}", err);
-                HttpResponse::InternalServerError().body(err.to_string())
-            }
-        }
-    } else {
-        HttpResponse::Ok().body(format!("Invalid input: {:?} Tickets were added!", tickets))
-    }*/
 }
 //endregion
 

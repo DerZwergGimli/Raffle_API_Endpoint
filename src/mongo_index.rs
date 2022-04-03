@@ -1,4 +1,4 @@
-use mongodb::{bson::doc, options::IndexOptions, Client, Collection, IndexModel};
+use mongodb::{bson::doc, options::IndexOptions, Client, IndexModel};
 
 use super::Raffle;
 

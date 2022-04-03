@@ -1,21 +1,18 @@
-use super::model::Raffle;
-use crate::config_loader::ConfigFile;
-use crate::solscan_api::SolanaTX;
+use std::env;
 
-use crate::{solscan_api, DatabaseRaffle, Ticket};
 use log::info;
 use mongodb::bson::oid::ObjectId;
-use mongodb::{Client, Collection, Database};
-use reqwest::StatusCode;
+use mongodb::Client;
 use rust_decimal::prelude::ToPrimitive;
 use snafu::{prelude::*, Whatever};
-use std::env;
+
+use crate::{DatabaseRaffle, solscan_api, Ticket};
+use crate::solscan_api::SolanaTX;
 
 pub async fn validate_ticket(
     client: &Client,
     db_interface: &DatabaseRaffle,
     ticket: Ticket,
-    config: &ConfigFile,
 ) -> Result<u16, Whatever> {
     let tx = solscan_api::get_solana_tx(ticket.spl_tx_signature.clone()).await;
 
@@ -25,27 +22,45 @@ pub async fn validate_ticket(
         Ok(tx) => {
             info!("{:?}", tx);
             // Validate Ticket
-            // 1. check if raffle_id is valid
-            if !check_if_raffle_exists(client, db_interface, ticket.raffle_id).await {
-                whatever!("Raffle does not exist")
+            // Check if raffle_id is valid
+            if env::var("CHECK_TOKEN_SYMBOL").unwrap_or_default().parse::<bool>().unwrap_or(false) && !check_token(client, db_interface, ticket.raffle_id, &tx).await {
+                whatever!("Wrong token send in TX")
             };
 
-            // 2. check if tx_destination is valid
-            if !check_if_tx_destination_valid(&tx, &config.destination_account_address).await {
+            if env::var("CHECK_TX_STATUS").unwrap_or_default().parse::<bool>().unwrap_or(false) && !tx.status.contains("Success"){
+                whatever!("SPL TX status not valid")
+            };
+
+            if env::var("CHECK_RAFFLE_EXISTS").unwrap_or_default().parse::<bool>().unwrap_or(false) && !check_if_raffle_exists(client, db_interface, ticket.raffle_id).await {
+                whatever!("Raffle does not exist")
+            };
+            // Check if raffle is running
+            if env::var("CHECK_RAFFLE_RUNNING").unwrap_or_default().parse::<bool>().unwrap_or(false) && !check_if_raffle_is_running(client, db_interface, ticket.raffle_id).await {
+                whatever!("Raffle is not running")
+            };
+
+            // Check if date_time is valid
+            if env::var("CHECK_RAFFLE_TIME").unwrap_or_default().parse::<bool>().unwrap_or(false) && !check_if_past_raffle_create(client, db_interface, ticket.raffle_id, &tx).await {
+                whatever!("DateTime invalid")
+            };
+
+            // Check if tx_destination is valid
+            if env::var("CHECK_RAFFLE_DESTINATION").unwrap_or_default().parse::<bool>().unwrap_or(false) && !check_if_tx_destination_valid(&tx).await {
                 whatever!("Destination invalid")
             };
 
-            // 3. check if spl_tx_signature is used
-            if check_if_spl_signature_is_used(client, db_interface, &ticket.spl_tx_signature).await
-            {
+            // Check if spl_tx_signature is used
+            if env::var("CHECK_RAFFLE_USED_SIGNATURE").unwrap_or_default().parse::<bool>().unwrap_or(false) && check_if_spl_signature_is_used(client, db_interface, &ticket.spl_tx_signature).await {
                 whatever!("SPL Signature already used")
             };
 
-            // 4 calculate valid ticket amount
-            // 4.1 calculate available ticket amount
+
+            // Calculate valid ticket amount
             let tickets =
                 calculate_ticket_amount(client, db_interface, ticket.raffle_id, tx.amount).await;
-
+            if tickets == 0 {
+                whatever!("Ticket amount would be 0")
+            };
             Ok(tickets)
         }
         Err(e) => whatever!("API-Error {}", e),
@@ -58,15 +73,39 @@ async fn check_if_raffle_exists(
     oid: ObjectId,
 ) -> bool {
     let raffle = db_interface.get_raffle_by_id(client, oid).await.unwrap();
-    if !raffle.is_empty() {
-        true
-    } else {
-        false
-    }
+    !raffle.is_empty()
 }
 
-async fn check_if_tx_destination_valid(tx: &SolanaTX, tx_destination: &String) -> bool {
-    tx.destination_owner.contains(tx_destination)
+async fn check_if_raffle_is_running(
+    client: &Client,
+    db_interface: &DatabaseRaffle,
+    oid: ObjectId,
+) -> bool {
+    let raffle = db_interface.get_raffle_by_id(client, oid).await.unwrap();
+    raffle[0].status.contains("running")
+}
+
+async fn check_if_past_raffle_create(client: &Client,
+                                     db_interface: &DatabaseRaffle,
+                                     oid: ObjectId,
+                                     tx: &SolanaTX) -> bool {
+    let raffle = db_interface.get_raffle_by_id(client, oid).await.unwrap();
+    tx.block_time > raffle[0].date_created
+}
+
+
+async fn check_token(client: &Client,
+                     db_interface: &DatabaseRaffle,
+                     oid: ObjectId,
+                     tx: &SolanaTX) -> bool {
+    let raffle = db_interface.get_raffle_by_id(client,oid).await.unwrap();
+
+    raffle[0].ticket_token_name.contains(&tx.token_symbol)
+}
+
+
+async fn check_if_tx_destination_valid(tx: &SolanaTX) -> bool {
+    tx.destination_owner.contains(&env::var("SOL_WALLET").unwrap().to_string())
 }
 
 async fn check_if_spl_signature_is_used(
@@ -79,7 +118,7 @@ async fn check_if_spl_signature_is_used(
         .await
         .unwrap();
     match result {
-        Some(result) => true,
+        Some(_result) => true,
         None => false,
     }
 }

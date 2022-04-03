@@ -17,7 +17,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: DOCKERFILE
+      dockerfile: Dockerfile
     image: api
     restart: unless-stopped
     links:

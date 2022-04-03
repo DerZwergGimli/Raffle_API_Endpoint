@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.56.0 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.59.0 AS chef
 WORKDIR app
 
 FROM chef AS planner
@@ -11,13 +11,16 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
-RUN cargo build --release --bin Raffle_MongoDB_API
+RUN cargo build --release --bin raffle_mongo_api
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:buster-slim AS runtime
+FROM debian:bullseye-slim AS runtime
 RUN apt-get update
 RUN apt-get install openssl -y
-RUN apt-get install libnss3-tools -y
+RUN apt-get install curl -y
+
+#RUN apt-get install libssl-dev -y
+#RUN apt-get install libnss3-tools -y
 #RUN apt-get install build-essential procps curl file git -y
 #RUN useradd -ms /bin/bash -g root -G sudo user
 #USER user
@@ -30,8 +33,8 @@ RUN mkdir -p /app/cert
 #RUN cd /app/cert && openssl pkey -in key.pem -pubout -out cert.pem
 RUN cd /app/cert && openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem -subj "/C=GE/ST=London/L=London/O=Global Security/OU=IT Department/CN=example.com"
 
-COPY --from=builder /app/target/release/Raffle_MongoDB_API /app
+COPY --from=builder /app/target/release/raffle_mongo_api /app
 RUN ls -la /app
 #EXPOSE 8080
-#CMD ["/app/Raffle_MongoDB_API"]
-ENTRYPOINT ["/app/Raffle_MongoDB_API"]
+#CMD ["/app/raffle_mongo_api"]
+ENTRYPOINT ["/app/raffle_mongo_api"]
