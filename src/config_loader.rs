@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ConfigFile {
-    pub access_tokens: Vec<String>,
     pub database_name: String,
     pub collection_raffle: String,
     pub collection_ticket: String,

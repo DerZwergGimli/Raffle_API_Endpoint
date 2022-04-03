@@ -80,7 +80,9 @@ async fn token_validator(
     req: ServiceRequest,
     credentials: BearerAuth,
 ) -> Result<ServiceRequest, Error> {
-    let tokens = config_loader::load_config_file().access_tokens;
+
+
+    let tokens = vec![env::var("API_BEARER_TOKEN").unwrap()];
 
     let mut valid = false;
     for token in tokens {
@@ -93,8 +95,7 @@ async fn token_validator(
         Ok(req)
     } else {
         let config = req
-            .app_data::<Config>()
-            .map(|data| data.clone())
+            .app_data::<Config>().cloned()
             .unwrap_or_else(Default::default)
             .scope("urn:example:channel=HBO&urn:example:rating=G,PG-13");
 
