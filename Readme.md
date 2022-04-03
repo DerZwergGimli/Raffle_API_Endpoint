@@ -9,18 +9,21 @@ This is an implementation for a REST-API for hosting raffles.
 ```
 
 +----------------+
-|   Raffle BOT   |     
+|   Raffle BOT   | here: https://github.com/DerZwergGimli/DRRB
 +----------------+
         |
 +----------------+
-|   Raffle API   |     
+|   Raffle API   | in here 
 +----------------+
         |
 +----------------+
-|    MongoDB     |
+|    MongoDB     | via docker
 +----------------+
 
 ```
+
+The UI is currently only a discord bot can be found here:
+https://github.com/DerZwergGimli/DRRB
 
 ## Deploy via DOCKER
 
